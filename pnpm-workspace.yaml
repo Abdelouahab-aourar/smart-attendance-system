@@ -1,0 +1,4 @@
+allowBuilds:
+  esbuild: true
+minimumReleaseAgeExclude:
+  - '@tailwindcss/oxide-wasm32-wasi@4.3.2'
