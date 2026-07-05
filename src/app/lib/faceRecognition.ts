@@ -8,6 +8,15 @@ export interface MockStudentProfile {
   descriptor: Float32Array;
 }
 
+export interface EnrolledStudent {
+  studentId: string;
+  studentName: string;
+  created_at?: string;
+  modified_at?: string;
+  images: string[];
+  descriptors: number[][];
+}
+
 const createMockDescriptor = (seedText: string) => {
   let seed = Array.from(seedText).reduce((accumulator, character) => {
     return ((accumulator << 5) - accumulator + character.charCodeAt(0)) >>> 0;
@@ -35,12 +44,56 @@ export const mockStudentProfiles: MockStudentProfile[] = [
   { id: '8', name: 'Lisa Garcia', descriptor: createMockDescriptor('Lisa Garcia') },
 ];
 
-export const buildFaceMatcher = (threshold = 0.58) => {
-  const labeledDescriptors = mockStudentProfiles.map(
-    (student) => new faceapi.LabeledFaceDescriptors(student.name, [student.descriptor])
-  );
+const buildFallbackEnrolledStudents = (): EnrolledStudent[] => {
+  return mockStudentProfiles.map((student) => ({
+    studentId: student.id,
+    studentName: student.name,
+    images: [],
+    descriptors: [Array.from(student.descriptor)],
+  }));
+};
+
+export const buildFaceMatcher = (students: EnrolledStudent[] = [], threshold = 0.58) => {
+  const sourceStudents = students.length > 0 ? students : buildFallbackEnrolledStudents();
+  const labeledDescriptors = sourceStudents
+    .filter((student) => student.descriptors.length > 0)
+    .map(
+      (student) =>
+        new faceapi.LabeledFaceDescriptors(
+          student.studentName,
+          student.descriptors.map((descriptor) => new Float32Array(descriptor))
+        )
+    );
 
   return new faceapi.FaceMatcher(labeledDescriptors, threshold);
+};
+
+export const extractFaceDescriptorsFromImages = async (imageSources: string[]) => {
+  const descriptors: number[][] = [];
+
+  for (const imageSource of imageSources) {
+    try {
+      const image = await faceapi.fetchImage(imageSource);
+      const detection = await faceapi
+        .detectSingleFace(
+          image,
+          new faceapi.TinyFaceDetectorOptions({
+            inputSize: 416,
+            scoreThreshold: 0.5,
+          })
+        )
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      if (detection) {
+        descriptors.push(Array.from(detection.descriptor));
+      }
+    } catch (error) {
+      console.error('Failed to extract face descriptor from image:', error);
+    }
+  }
+
+  return descriptors;
 };
 
 export const loadFaceRecognitionModels = async () => {

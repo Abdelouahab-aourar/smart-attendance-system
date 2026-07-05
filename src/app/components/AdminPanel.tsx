@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -7,8 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
-import { ArrowLeft, LogOut, BarChart3, Users, Calendar, Shield, Eye, EyeOff, TrendingUp } from 'lucide-react';
+import { ArrowLeft, LogOut, BarChart3, Users, Calendar, Shield, Eye, EyeOff, TrendingUp, Upload, X } from 'lucide-react';
 import { AttendanceRecord, StudentReport } from '../App';
+import { extractFaceDescriptorsFromImages, loadFaceRecognitionModels } from '../lib/faceRecognition';
 
 interface AdminPanelProps {
   isLoggedIn: boolean;
@@ -16,7 +17,12 @@ interface AdminPanelProps {
   onLogout: () => void;
   onNavigateHome: () => void;
   attendanceRecords: AttendanceRecord[];
-  studentReports: StudentReport[];
+  students: StudentReport[];
+  onAddStudent: (student: Omit<StudentReport, 'created_at' | 'modified_at'>) => void;
+  onUpdateStudent: (
+    originalStudentId: string,
+    student: Omit<StudentReport, 'created_at' | 'modified_at'>
+  ) => void;
 }
 
 export function AdminPanel({
@@ -25,14 +31,24 @@ export function AdminPanel({
   onLogout,
   onNavigateHome,
   attendanceRecords,
-  studentReports
+  students,
+  onAddStudent,
+  onUpdateStudent,
 }: AdminPanelProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [showAddStudentForm, setShowAddStudentForm] = useState(false);
+  const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
+  const [studentId, setStudentId] = useState('');
+  const [studentName, setStudentName] = useState('');
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [selectedImageNames, setSelectedImageNames] = useState<string[]>([]);
+  const [isSavingStudent, setIsSavingStudent] = useState(false);
+  const [studentError, setStudentError] = useState('');
 
-  const handleLogin = (e: React.SubmitEvent<HTMLFormElement>) => {
+  const handleLogin = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const success = onLogin(username, password);
     if (!success) {
@@ -41,6 +57,104 @@ export function AdminPanel({
       setLoginError('');
       setUsername('');
       setPassword('');
+    }
+  };
+
+  const readFileAsDataUrl = (file: File) => {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+      reader.onerror = () => reject(new Error(`Unable to read ${file.name}`));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const resetStudentForm = () => {
+    setEditingStudentId(null);
+    setStudentId('');
+    setStudentName('');
+    setSelectedImages([]);
+    setSelectedImageNames([]);
+    setStudentError('');
+  };
+
+  const beginEditStudent = (student: StudentReport) => {
+    setEditingStudentId(student.studentId);
+    setStudentId(student.studentId);
+    setStudentName(student.studentName);
+    setSelectedImages(student.images);
+    setSelectedImageNames(student.images.map((_, index) => `Existing image ${index + 1}`));
+    setStudentError('');
+    setShowAddStudentForm(true);
+  };
+
+  const handleStudentImagesChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+
+    if (files.length === 0) {
+      setSelectedImages([]);
+      setSelectedImageNames([]);
+      return;
+    }
+
+    try {
+      const imageSources = await Promise.all(files.map((file) => readFileAsDataUrl(file)));
+      setSelectedImages(imageSources);
+      setSelectedImageNames(files.map((file) => file.name));
+      setStudentError('');
+    } catch (error) {
+      console.error('Failed to read student images:', error);
+      setStudentError('Unable to read one or more images. Please try again.');
+    }
+  };
+
+  const handleAddStudent = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setStudentError('');
+
+    const trimmedStudentId = studentId.trim();
+    const trimmedStudentName = studentName.trim();
+
+    if (!trimmedStudentId || !trimmedStudentName) {
+      setStudentError('Student ID and student name are required.');
+      return;
+    }
+
+    if (selectedImages.length === 0) {
+      setStudentError('Please upload at least one clear image of the student.');
+      return;
+    }
+
+    try {
+      setIsSavingStudent(true);
+      await loadFaceRecognitionModels();
+      const descriptors = await extractFaceDescriptorsFromImages(selectedImages);
+
+      if (descriptors.length === 0) {
+        setStudentError('No face could be detected in the uploaded images. Please try clearer photos.');
+        return;
+      }
+
+      const payload = {
+        studentId: trimmedStudentId,
+        studentName: trimmedStudentName,
+        images: selectedImages,
+        descriptors,
+      };
+
+      if (editingStudentId) {
+        onUpdateStudent(editingStudentId, payload);
+      } else {
+        onAddStudent(payload);
+      }
+
+      resetStudentForm();
+      setShowAddStudentForm(false);
+    } catch (error) {
+      console.error('Failed to add student:', error);
+      setStudentError('Unable to add the student right now. Please try again.');
+    } finally {
+      setIsSavingStudent(false);
     }
   };
 
@@ -135,9 +249,9 @@ export function AdminPanel({
   };
 
   // Calculate analytics
-  const totalStudents = attendanceRecords.length;
+  const totalStudents = students.length;
   const presentStudents = attendanceRecords.filter(r => r.status === 'present').length;
-  const attendanceRate = Math.round((presentStudents / totalStudents) * 100);
+  const attendanceRate = totalStudents > 0 ? Math.round((presentStudents / totalStudents) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
@@ -285,34 +399,167 @@ export function AdminPanel({
           {/* Students Tab */}
           <TabsContent value="students" className="space-y-6">
             <Card>
-              <CardHeader>
-                <CardTitle>Student Management</CardTitle>
+              <CardHeader className="flex flex-row items-center justify-between gap-4">
+                <div>
+                  <CardTitle>Student Management</CardTitle>
+                  <p className="text-sm text-gray-600 mt-1">Add students with their images so face recognition can learn them later.</p>
+                </div>
+                <Button onClick={() => setShowAddStudentForm((current) => !current)}>
+                  {showAddStudentForm ? 'Close Form' : 'Add New Student'}
+                </Button>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
+                <div className="space-y-6">
+                  {showAddStudentForm && (
+                    <Card className="border-dashed bg-gray-50/80">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Upload className="h-5 w-5" />
+                          {editingStudentId ? 'Edit Student' : 'Add Student'}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <form onSubmit={handleAddStudent} className="space-y-5">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="studentId">Student ID</Label>
+                              <Input
+                                id="studentId"
+                                value={studentId}
+                                onChange={(event) => setStudentId(event.target.value)}
+                                placeholder="Enter student ID"
+                                required
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="studentName">Student Name</Label>
+                              <Input
+                                id="studentName"
+                                value={studentName}
+                                onChange={(event) => setStudentName(event.target.value)}
+                                placeholder="Enter student name"
+                                required
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="studentImages">Student Images</Label>
+                              <Input id="studentImages" type="file" accept="image/*" multiple onChange={handleStudentImagesChange} />
+                            <p className="text-xs text-gray-500">
+                              Upload 1 or more clear photos of the student. These images are used to extract face descriptors.
+                            </p>
+                          </div>
+
+                          {selectedImages.length > 0 && (
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <p className="text-sm font-medium text-gray-700">
+                                  Selected Images ({selectedImages.length})
+                                </p>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    resetStudentForm();
+                                  }}
+                                >
+                                  <X className="h-4 w-4 mr-2" />
+                                  Clear
+                                </Button>
+                              </div>
+
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                {selectedImages.map((imageSource, index) => (
+                                  <div key={`${selectedImageNames[index] ?? 'student-image'}-${index}`} className="rounded-lg border bg-white overflow-hidden">
+                                    <img
+                                      src={imageSource}
+                                      alt={selectedImageNames[index] ?? `Student image ${index + 1}`}
+                                      className="h-28 w-full object-cover"
+                                    />
+                                    <div className="p-2">
+                                      <p className="text-xs text-gray-600 truncate">
+                                        {selectedImageNames[index] ?? `Image ${index + 1}`}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {studentError && (
+                            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                              {studentError}
+                            </div>
+                          )}
+
+                          <div className="flex flex-wrap gap-3">
+                            <Button type="submit" disabled={isSavingStudent}>
+                              {isSavingStudent ? 'Saving Student...' : editingStudentId ? 'Update Student' : 'Save Student'}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                resetStudentForm();
+                                setShowAddStudentForm(false);
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </form>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  <div className="flex justify-between items-center gap-4">
                     <Input placeholder="Search students..." className="max-w-sm" />
-                    <Button>Add New Student</Button>
+                    <Badge variant="outline">{students.length} enrolled</Badge>
                   </div>
+
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Student ID</TableHead>
                         <TableHead>Student Name</TableHead>
+                        <TableHead>Images</TableHead>
                         <TableHead>created_at</TableHead>
                         <TableHead>modified_at</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {studentReports.map((report) => (
-                        <TableRow key={report.studentId}>
-                          <TableCell>{report.studentId}</TableCell>
-                          <TableCell>{report.studentName}</TableCell>
-                          <TableCell>{report.created_at}</TableCell>
-                          <TableCell>{report.modified_at}</TableCell>
+                      {students.map((student) => (
+                        <TableRow key={student.studentId}>
+                          <TableCell>{student.studentId}</TableCell>
+                          <TableCell>{student.studentName}</TableCell>
                           <TableCell>
-                            <Button variant="outline" size="sm">
+                            {student.images.length > 0 ? (
+                              <div className="flex items-center gap-2">
+                                <div className="flex -space-x-2">
+                                  {student.images.slice(0, 3).map((imageSource, index) => (
+                                    <img
+                                      key={`${student.studentId}-image-${index}`}
+                                      src={imageSource}
+                                      alt={`${student.studentName} ${index + 1}`}
+                                      className="h-10 w-10 rounded-full border-2 border-white object-cover"
+                                    />
+                                  ))}
+                                </div>
+                                <Badge variant="secondary">{student.images.length} photo{student.images.length === 1 ? '' : 's'}</Badge>
+                              </div>
+                            ) : (
+                              <Badge variant="outline">No images</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>{student.created_at}</TableCell>
+                          <TableCell>{student.modified_at}</TableCell>
+                          <TableCell>
+                            <Button variant="outline" size="sm" onClick={() => beginEditStudent(student)}>
                               Edit
                             </Button>
                           </TableCell>

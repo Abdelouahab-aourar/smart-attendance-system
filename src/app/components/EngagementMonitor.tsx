@@ -5,13 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Alert, AlertDescription } from './ui/alert';
 import { Badge } from './ui/badge';
 import { Camera, ArrowLeft, Brain, PlayCircle, StopCircle, UserCheck, CheckCircle } from 'lucide-react';
-import { AttendanceRecord } from '../App';
+import { AttendanceRecord, StudentReport } from '../App';
 import { buildFaceMatcher, loadFaceRecognitionModels } from '../lib/faceRecognition';
 
 interface EngagementMonitorProps {
   onNavigateHome: () => void;
   onAddAttendance: (studentName: string, faceDetected: boolean) => void;
   attendanceRecords: AttendanceRecord[];
+  students: StudentReport[];
 }
 
 interface RecognizedFace {
@@ -24,6 +25,7 @@ export function EngagementMonitor({
   onNavigateHome,
   onAddAttendance,
   attendanceRecords,
+  students,
 }: EngagementMonitorProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -191,7 +193,7 @@ export function EngagementMonitor({
     try {
       if (!faceMatcherRef.current) {
         const modelSource = await loadFaceRecognitionModels();
-        faceMatcherRef.current = buildFaceMatcher();
+        faceMatcherRef.current = buildFaceMatcher(students);
         setStatusMessage(`Face-api.js models loaded from ${modelSource}.`);
       }
 

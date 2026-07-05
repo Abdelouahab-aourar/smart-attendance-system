@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Home } from './components/Home';
 import { AdminPanel } from './components/AdminPanel';
 import { EngagementMonitor } from './components/EngagementMonitor';
+import { mockStudentProfiles } from './lib/faceRecognition';
 
 export type Screen = 'home' | 'admin' | 'engagement';
 
@@ -17,6 +18,8 @@ export interface StudentReport {
   studentName: string;
   created_at: string;
   modified_at: string;
+  images: string[];
+  descriptors: number[][];
 }
 
 export default function App() {
@@ -38,20 +41,16 @@ export default function App() {
     }
   ]);
 
-  const [studentReports] = useState<StudentReport[]>([
-    {
-      studentId: '1',
-      studentName: 'John Doe',
+  const [studentReports, setStudentReports] = useState<StudentReport[]>(
+    mockStudentProfiles.map((student) => ({
+      studentId: student.id,
+      studentName: student.name,
       created_at: '2025-01-17 09:05:00',
       modified_at: '2025-01-17 09:05:00',
-    },
-    {
-      studentId: '2',
-      studentName: 'Jane Smith',
-      created_at: '2025-01-17 09:05:00',
-      modified_at: '2025-01-17 09:05:00',
-    }
-  ]);
+      images: [],
+      descriptors: [Array.from(student.descriptor)],
+    }))
+  );
 
   const handleStartAttendance = () => {
     setCurrentScreen('engagement');
@@ -84,6 +83,38 @@ export default function App() {
     setAttendanceRecords(prev => [...prev, newRecord]);
   };
 
+  const addStudentRecord = (student: Omit<StudentReport, 'created_at' | 'modified_at'>) => {
+    const timestamp = new Date().toLocaleString();
+    const newStudent: StudentReport = {
+      ...student,
+      created_at: timestamp,
+      modified_at: timestamp,
+    };
+
+    setStudentReports((previousStudents) => [...previousStudents, newStudent]);
+  };
+
+  const updateStudentRecord = (
+    originalStudentId: string,
+    student: Omit<StudentReport, 'created_at' | 'modified_at'>
+  ) => {
+    const timestamp = new Date().toLocaleString();
+
+    setStudentReports((previousStudents) =>
+      previousStudents.map((existingStudent) => {
+        if (existingStudent.studentId !== originalStudentId) {
+          return existingStudent;
+        }
+
+        return {
+          ...student,
+          created_at: existingStudent.created_at,
+          modified_at: timestamp,
+        };
+      })
+    );
+  };
+
 
   return (
     <div className="min-h-screen bg-background">
@@ -99,6 +130,7 @@ export default function App() {
           onNavigateHome={() => setCurrentScreen('home')}
           onAddAttendance={addAttendanceRecord}
           attendanceRecords={attendanceRecords}
+          students={studentReports}
         />
       )}
 
@@ -109,7 +141,9 @@ export default function App() {
           onLogout={handleLogout}
           onNavigateHome={() => setCurrentScreen('home')}
           attendanceRecords={attendanceRecords}
-          studentReports={studentReports}
+          students={studentReports}
+          onAddStudent={addStudentRecord}
+          onUpdateStudent={updateStudentRecord}
         />
       )}
     </div>
