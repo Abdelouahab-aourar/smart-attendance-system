@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import * as faceapi from 'face-api.js';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Alert, AlertDescription } from './ui/alert';
 import { Badge } from './ui/badge';
 import { Camera, ArrowLeft, Brain, PlayCircle, StopCircle, UserCheck, CheckCircle } from 'lucide-react';
 import { AttendanceRecord } from '../App';
+import { buildFaceMatcher, loadFaceRecognitionModels } from '../lib/faceRecognition';
 
 interface EngagementMonitorProps {
   onNavigateHome: () => void;
@@ -12,96 +14,74 @@ interface EngagementMonitorProps {
   attendanceRecords: AttendanceRecord[];
 }
 
-interface DetectedFace {
+interface RecognizedFace {
   id: string;
   name: string;
+  confidence: number;
 }
 
 export function EngagementMonitor({
   onNavigateHome,
+  onAddAttendance,
+  attendanceRecords,
 }: EngagementMonitorProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const scanTimeoutRef = useRef<number | null>(null);
+  const activeRef = useRef(false);
+  const faceMatcherRef = useRef<faceapi.FaceMatcher | null>(null);
+  const recognizedThisSessionRef = useRef(new Set<string>());
   const [isActive, setIsActive] = useState(false);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState('Ready to start face recognition.');
+  const [detectedFaces, setDetectedFaces] = useState<RecognizedFace[]>([]);
   const [recognitionStats, setRecognitionStats] = useState({
     totalDetected: 0,
     recognized: 0,
+    unknown: 0,
   });
 
-  // Mock students database
-  const knownStudents = [
-    'John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson',
-    'Alex Chen', 'Emily Brown', 'David Wilson', 'Lisa Garcia'
-  ];
+  const clearScanTimer = () => {
+    if (scanTimeoutRef.current !== null) {
+      window.clearTimeout(scanTimeoutRef.current);
+      scanTimeoutRef.current = null;
+    }
+  };
 
   const initializeCamera = async () => {
     try {
+      setCameraError(null);
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 1280, height: 720 }
       });
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        await videoRef.current.play();
         return true;
       }
     } catch (error) {
       console.error('Camera initialization failed:', error);
+      setCameraError('Unable to access the camera. Check permissions and try again.');
       return false;
     }
     return false;
   };
 
-  const simulateFaceDetection = () => {
-    // Simulate detecting 2-4 faces
-    const numFaces = Math.floor(Math.random() * 3) + 2;
-    const faces: DetectedFace[] = [];
-
-    for (let i = 0; i < numFaces; i++) {
-      const studentName = knownStudents[Math.floor(Math.random() * knownStudents.length)];
-      const face: DetectedFace = {
-        id: `face-${i}`,
-        name: studentName,
-      };
-      faces.push(face);
-    }
-
-    return faces;
-  };
-
-  const processDetections = (faces: DetectedFace[]) => {
-
-    setRecognitionStats({
-      totalDetected: faces.length,
-      recognized: faces.length,
-    });
-  };
-  const startDetection = async () => {
-    const cameraReady = await initializeCamera();
-    if (!cameraReady) return;
-
-    setIsActive(true);
-
-    // Start face detection simulation
-    const detectionInterval = setInterval(() => {
-      if (!isActive) {
-        clearInterval(detectionInterval);
-        return;
-      }
-
-      const faces = simulateFaceDetection();
-      processDetections(faces);
-    }, 2000);
-
-    // Mark attendance for initially detected faces
-    setTimeout(() => {
-      simulateFaceDetection();
-    }, 3000);
-  };
-
   const stopDetection = () => {
+    activeRef.current = false;
     setIsActive(false);
+    setStatusMessage('Face recognition stopped.');
+    clearScanTimer();
+    recognizedThisSessionRef.current.clear();
+    setDetectedFaces([]);
+    setRecognitionStats({
+      totalDetected: 0,
+      recognized: 0,
+      unknown: 0,
+    });
 
-    // Clear canvas
     const canvas = canvasRef.current;
     if (canvas) {
       const ctx = canvas.getContext('2d');
@@ -110,12 +90,129 @@ export function EngagementMonitor({
       }
     }
 
-    // Stop camera
     if (videoRef.current?.srcObject) {
       const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
       tracks.forEach(track => track.stop());
+      videoRef.current.srcObject = null;
     }
   };
+
+  const processDetections = async () => {
+    if (!activeRef.current || !videoRef.current || !canvasRef.current) {
+      return;
+    }
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const displaySize = {
+      width: video.videoWidth || 1280,
+      height: video.videoHeight || 720,
+    };
+
+    faceapi.matchDimensions(canvas, displaySize);
+
+    try {
+      const detections = await faceapi
+        .detectAllFaces(
+          video,
+          new faceapi.TinyFaceDetectorOptions({
+            inputSize: 416,
+            scoreThreshold: 0.5,
+          })
+        )
+        .withFaceLandmarks()
+        .withFaceDescriptors();
+
+      const resizedDetections = faceapi.resizeResults(detections, displaySize);
+      const faceMatcher = faceMatcherRef.current;
+      const currentAttendanceNames = new Set(attendanceRecords.map((record) => record.studentName));
+
+      const nextFaces: RecognizedFace[] = resizedDetections.map((detection, index) => {
+        const bestMatch = faceMatcher
+          ? faceMatcher.findBestMatch(detection.descriptor)
+          : { label: 'unknown', distance: 1 };
+
+        const isRecognized = bestMatch.label !== 'unknown';
+        const confidence = Math.max(0, Math.min(100, Math.round((1 - bestMatch.distance) * 100)));
+        const displayLabel = isRecognized ? bestMatch.label : 'Unknown';
+
+        if (isRecognized && !currentAttendanceNames.has(bestMatch.label) && !recognizedThisSessionRef.current.has(bestMatch.label)) {
+          recognizedThisSessionRef.current.add(bestMatch.label);
+          onAddAttendance(bestMatch.label, true);
+        }
+
+        const box = detection.detection.box;
+        const drawBox = new faceapi.draw.DrawBox(box, {
+          label: `${displayLabel} ${isRecognized ? `(${confidence}%)` : ''}`.trim(),
+        });
+
+        drawBox.draw(canvas);
+
+        return {
+          id: `face-${index}-${Date.now()}`,
+          name: displayLabel,
+          confidence,
+        };
+      });
+
+      setDetectedFaces(nextFaces);
+      setRecognitionStats({
+        totalDetected: nextFaces.length,
+        recognized: nextFaces.filter((face) => face.name !== 'Unknown').length,
+        unknown: nextFaces.filter((face) => face.name === 'Unknown').length,
+      });
+
+      setStatusMessage(
+        nextFaces.length > 0
+          ? `${nextFaces.length} face${nextFaces.length === 1 ? '' : 's'} detected.`
+          : 'Scanning for faces...'
+      );
+    } catch (error) {
+      console.error('Face detection failed:', error);
+      setStatusMessage('Face detection is running, but the current frame could not be processed.');
+    }
+
+    if (activeRef.current) {
+      clearScanTimer();
+      scanTimeoutRef.current = window.setTimeout(() => {
+        void processDetections();
+      }, 1000);
+    }
+  };
+
+  const startDetection = async () => {
+    if (isActive || isLoadingModels) {
+      return;
+    }
+
+    setIsLoadingModels(true);
+    setStatusMessage('Loading face-api.js models...');
+
+    try {
+      if (!faceMatcherRef.current) {
+        const modelSource = await loadFaceRecognitionModels();
+        faceMatcherRef.current = buildFaceMatcher();
+        setStatusMessage(`Face-api.js models loaded from ${modelSource}.`);
+      }
+
+      const cameraReady = await initializeCamera();
+      if (!cameraReady) {
+        return;
+      }
+
+      activeRef.current = true;
+      setIsActive(true);
+      setStatusMessage('Face recognition is active. Matching live faces against the demo roster.');
+      await processDetections();
+    } catch (error) {
+      console.error('Failed to start face recognition:', error);
+      setCameraError('Face recognition could not start. The app could not load face-api.js models from the local folder or the hosted fallback.');
+      setStatusMessage('Unable to start face recognition.');
+    } finally {
+      setIsLoadingModels(false);
+    }
+  };
+
   useEffect(() => {
     return () => {
       stopDetection();
@@ -150,16 +247,27 @@ export function EngagementMonitor({
             </Button>
             <div>
               <h1 className="text-3xl text-gray-800">Smart attendance system</h1>
+              <p className="text-sm text-gray-500 mt-1">Face-api.js powered recognition with dummy roster data.</p>
             </div>
           </div>
           <div className="flex gap-2">
             {!isActive ? (
               <Button
                 onClick={startDetection}
+                disabled={isLoadingModels}
                 className="bg-green-600 hover:bg-green-700 flex items-center gap-2"
               >
-                <PlayCircle className="h-4 w-4" />
-                Start Detection
+                {isLoadingModels ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Loading Models...
+                  </>
+                ) : (
+                  <>
+                    <PlayCircle className="h-4 w-4" />
+                    Start Detection
+                  </>
+                )}
               </Button>
             ) : (
               <Button
@@ -174,6 +282,12 @@ export function EngagementMonitor({
           </div>
         </div>
 
+        {cameraError && (
+          <Alert className="mb-6 border-red-200 bg-red-50">
+            <AlertDescription className="text-red-800">{cameraError}</AlertDescription>
+          </Alert>
+        )}
+
         {/* Status Alert */}
         {isActive && (
           <Alert className="mb-6 border-green-200 bg-green-50">
@@ -184,6 +298,10 @@ export function EngagementMonitor({
             </AlertDescription>
           </Alert>
         )}
+
+        <Alert className="mb-6 border-slate-200 bg-slate-50">
+          <AlertDescription className="text-slate-700">{statusMessage}</AlertDescription>
+        </Alert>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Camera Feed */}
@@ -210,12 +328,12 @@ export function EngagementMonitor({
                     style={{ pointerEvents: 'none' }}
                   />
 
-                  {isActive && (
+                  {(isActive || isLoadingModels) && (
                     <div className="absolute top-4 right-4">
                       <Badge className="bg-red-500 text-white px-3 py-1">
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                          RECORDING
+                          {isLoadingModels ? 'LOADING' : 'ACTIVE'}
                         </div>
                       </Badge>
                     </div>
@@ -225,7 +343,7 @@ export function EngagementMonitor({
                 {!isActive && (
                   <div className="mt-4 text-center text-gray-600">
                     <Camera className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-                    <p>Click "Start Detection" to begin facial recognition and engagement monitoring</p>
+                      <p>Click "Start Detection" to begin facial recognition and engagement monitoring.</p>
                   </div>
                 )}
               </CardContent>
@@ -253,6 +371,11 @@ export function EngagementMonitor({
                     {recognitionStats.recognized}
                   </Badge>
                 </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Unknown Faces</span>
+                  <Badge variant="secondary">{recognitionStats.unknown}</Badge>
+                </div>
               </CardContent>
             </Card>
 
@@ -266,11 +389,26 @@ export function EngagementMonitor({
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  (
-                  <p className="text-sm text-gray-500 text-center py-4">
-                    No faces currently detected
-                  </p>
-                  )
+                  {detectedFaces.length === 0 ? (
+                    <p className="text-sm text-gray-500 text-center py-4">
+                      No faces currently detected
+                    </p>
+                  ) : (
+                    detectedFaces.map((face) => (
+                      <div
+                        key={face.id}
+                        className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">{face.name}</p>
+                          <p className="text-xs text-gray-500">Confidence {face.confidence}%</p>
+                        </div>
+                        <Badge variant={face.name === 'Unknown' ? 'secondary' : 'outline'}>
+                          {face.name === 'Unknown' ? 'Unmatched' : 'Matched'}
+                        </Badge>
+                      </div>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -283,7 +421,7 @@ export function EngagementMonitor({
               <CardContent>
                 <ul className="text-sm space-y-2 text-gray-600">
                   <li>• Position students within camera view</li>
-                  <li>• Attendance is marked automatically</li>
+                  <li>• Attendance is marked automatically for recognized faces</li>
                 </ul>
               </CardContent>
             </Card>
