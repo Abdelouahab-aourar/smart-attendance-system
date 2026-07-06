@@ -37,12 +37,12 @@ pub fn init_db() -> Result<String, String> {
         [],
     )
     .map_err(|e| format!("Failed to create STUDENT table: {}", e))?;
+
     conn.execute(
         "CREATE TABLE IF NOT EXISTS PHOTO (
             photo_id    INTEGER PRIMARY KEY AUTOINCREMENT,
             student_id  INTEGER NOT NULL,
             image_url   TEXT NOT NULL,
-            is_primary  INTEGER NOT NULL DEFAULT 0,
             FOREIGN KEY (student_id) REFERENCES STUDENT(student_id) ON DELETE CASCADE
         )",
         [],

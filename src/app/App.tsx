@@ -9,6 +9,7 @@ export type Screen = 'home' | 'admin' | 'engagement';
 export interface AttendanceRecord {
   id: string;
   studentName: string;
+  confidence: number;
   timestamp: string;
   status: 'present' | 'absent' | 'late';
 }
@@ -31,12 +32,14 @@ export default function App() {
       id: '1',
       studentName: 'John Doe',
       timestamp: '2025-01-17 09:00:00',
+      confidence: 50,
       status: 'present',
     },
     {
       id: '2',
       studentName: 'Jane Smith',
       timestamp: '2025-01-17 09:05:00',
+      confidence: 30,
       status: 'late',
     }
   ]);
@@ -69,7 +72,7 @@ export default function App() {
     setCurrentScreen('home');
   };
 
-  const addAttendanceRecord = (studentName: string, faceDetected: boolean) => {
+  const addAttendanceRecord = (studentName: string, confidence: number, faceDetected: boolean) => {
     if (!faceDetected) {
       return;
     }
@@ -77,6 +80,7 @@ export default function App() {
     const newRecord: AttendanceRecord = {
       id: Date.now().toString(),
       studentName,
+      confidence,
       timestamp: new Date().toLocaleString(),
       status: 'present',
     };

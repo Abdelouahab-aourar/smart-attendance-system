@@ -10,7 +10,7 @@ import { buildFaceMatcher, loadFaceRecognitionModels } from '../lib/faceRecognit
 
 interface EngagementMonitorProps {
   onNavigateHome: () => void;
-  onAddAttendance: (studentName: string, faceDetected: boolean) => void;
+  onAddAttendance: (studentName: string, confidence: number, faceDetected: boolean) => void;
   attendanceRecords: AttendanceRecord[];
   students: StudentReport[];
 }
@@ -140,7 +140,7 @@ export function EngagementMonitor({
 
         if (isRecognized && !currentAttendanceNames.has(bestMatch.label) && !recognizedThisSessionRef.current.has(bestMatch.label)) {
           recognizedThisSessionRef.current.add(bestMatch.label);
-          onAddAttendance(bestMatch.label, true);
+          onAddAttendance(bestMatch.label,confidence ,true,);
         }
 
         const box = detection.detection.box;

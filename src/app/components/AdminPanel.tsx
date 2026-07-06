@@ -10,7 +10,7 @@ import { Progress } from './ui/progress';
 import { ArrowLeft, LogOut, BarChart3, Users, Calendar, Shield, Eye, EyeOff, TrendingUp, Upload, X } from 'lucide-react';
 import { AttendanceRecord, StudentReport } from '../App';
 import { extractFaceDescriptorsFromImages, loadFaceRecognitionModels } from '../lib/faceRecognition';
-
+import { invoke } from "@tauri-apps/api/core"
 interface AdminPanelProps {
   isLoggedIn: boolean;
   onLogin: (username: string, password: string) => boolean;
@@ -41,7 +41,6 @@ export function AdminPanel({
   const [loginError, setLoginError] = useState('');
   const [showAddStudentForm, setShowAddStudentForm] = useState(false);
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
-  const [studentId, setStudentId] = useState('');
   const [studentName, setStudentName] = useState('');
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [selectedImageNames, setSelectedImageNames] = useState<string[]>([]);
@@ -71,7 +70,6 @@ export function AdminPanel({
 
   const resetStudentForm = () => {
     setEditingStudentId(null);
-    setStudentId('');
     setStudentName('');
     setSelectedImages([]);
     setSelectedImageNames([]);
@@ -80,7 +78,6 @@ export function AdminPanel({
 
   const beginEditStudent = (student: StudentReport) => {
     setEditingStudentId(student.studentId);
-    setStudentId(student.studentId);
     setStudentName(student.studentName);
     setSelectedImages(student.images);
     setSelectedImageNames(student.images.map((_, index) => `Existing image ${index + 1}`));
@@ -112,11 +109,10 @@ export function AdminPanel({
     event.preventDefault();
     setStudentError('');
 
-    const trimmedStudentId = studentId.trim();
     const trimmedStudentName = studentName.trim();
 
-    if (!trimmedStudentId || !trimmedStudentName) {
-      setStudentError('Student ID and student name are required.');
+    if (!trimmedStudentName) {
+      setStudentError('Student name is required.');
       return;
     }
 
@@ -135,8 +131,13 @@ export function AdminPanel({
         return;
       }
 
+      const savedStudentId = await invoke<string>('add_student', {
+        studentName: trimmedStudentName,
+        images: selectedImages,
+      });
+
       const payload = {
-        studentId: trimmedStudentId,
+        studentId: savedStudentId,
         studentName: trimmedStudentName,
         images: selectedImages,
         descriptors,
@@ -420,28 +421,15 @@ export function AdminPanel({
                       </CardHeader>
                       <CardContent>
                         <form onSubmit={handleAddStudent} className="space-y-5">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="studentId">Student ID</Label>
-                              <Input
-                                id="studentId"
-                                value={studentId}
-                                onChange={(event) => setStudentId(event.target.value)}
-                                placeholder="Enter student ID"
-                                required
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label htmlFor="studentName">Student Name</Label>
-                              <Input
-                                id="studentName"
-                                value={studentName}
-                                onChange={(event) => setStudentName(event.target.value)}
-                                placeholder="Enter student name"
-                                required
-                              />
-                            </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="studentName">Student Name</Label>
+                            <Input
+                              id="studentName"
+                              value={studentName}
+                              onChange={(event) => setStudentName(event.target.value)}
+                              placeholder="Enter student name"
+                              required
+                            />
                           </div>
 
                           <div className="space-y-2">
@@ -585,6 +573,7 @@ export function AdminPanel({
                       <TableHead>Student Name</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Time</TableHead>
+                      <TableHead>Confidence</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -594,6 +583,7 @@ export function AdminPanel({
                         <TableCell>{record.studentName}</TableCell>
                         <TableCell>{record.timestamp.split(' ')[0]}</TableCell>
                         <TableCell>{record.timestamp.split(' ')[1]}</TableCell>
+                        <TableCell>{record.confidence}</TableCell>
                         <TableCell>{getStatusBadge(record.status)}</TableCell>
                       </TableRow>
                     ))}
