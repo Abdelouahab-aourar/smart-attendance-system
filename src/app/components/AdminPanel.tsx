@@ -11,6 +11,7 @@ import { ArrowLeft, LogOut, BarChart3, Users, Calendar, Shield, Eye, EyeOff, Tre
 import { AttendanceRecord, StudentReport } from '../App';
 import { extractFaceDescriptorsFromImages, loadFaceRecognitionModels } from '../lib/faceRecognition';
 import { invoke } from "@tauri-apps/api/core"
+import { confirm, message } from '@tauri-apps/plugin-dialog';
 interface AdminPanelProps {
   isLoggedIn: boolean;
   onLogin: (username: string, password: string) => boolean;
@@ -23,6 +24,7 @@ interface AdminPanelProps {
     originalStudentId: string,
     student: Omit<StudentReport, 'created_at' | 'modified_at'>
   ) => void;
+    onDeleteStudent: (studentId: string) => void;
 }
 
 export function AdminPanel({
@@ -34,6 +36,7 @@ export function AdminPanel({
   students,
   onAddStudent,
   onUpdateStudent,
+  onDeleteStudent,
 }: AdminPanelProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -58,7 +61,26 @@ export function AdminPanel({
       setPassword('');
     }
   };
+  const handleDeleteStudent = async (studentId: string, studentName: string) => {
+    const confirmation = await confirm(
+      `This action cannot be reverted. Are you sure you want to delete ${studentName}?`,
+      { title: 'Confirmation message', kind: 'warning' }
+    );
+    if(!confirmation){
+      return
+    }
 
+    try {
+      await invoke<string>("delete_student", {
+        studentId: Number(studentId),
+      });
+      onDeleteStudent(studentId);
+      console.log("Student deleted successfully");
+    } catch (error) {
+      console.error("Failed to delete student:", error);
+      await message(`Failed to delete the student: ${studentName}`, { title: 'Delete Error', kind: 'error' });
+    }
+  };
   const readFileAsDataUrl = (file: File) => {
     return new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -433,7 +455,7 @@ export function AdminPanel({
 
                           <div className="space-y-2">
                             <Label htmlFor="studentImages">Student Images</Label>
-                              <Input id="studentImages" type="file" accept="image/*" multiple onChange={handleStudentImagesChange} />
+                            <Input id="studentImages" type="file" accept="image/*" multiple onChange={handleStudentImagesChange} />
                             <p className="text-xs text-gray-500">
                               Upload 1 or more clear photos of the student. These images are used to extract face descriptors.
                             </p>
@@ -546,9 +568,18 @@ export function AdminPanel({
                           <TableCell>{student.created_at}</TableCell>
                           <TableCell>{student.modified_at}</TableCell>
                           <TableCell>
-                            <Button variant="outline" size="sm" onClick={() => beginEditStudent(student)}>
-                              Edit
-                            </Button>
+                            <div className="flex gap-2">
+                              <Button variant="outline" size="sm" onClick={() => beginEditStudent(student)}>
+                                Edit
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => void handleDeleteStudent(student.studentId, student.studentName)}
+                              >
+                                Delete
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}

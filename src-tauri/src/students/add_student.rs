@@ -36,8 +36,6 @@ pub fn add_student(student_name: String, images: Vec<String>) -> Result<String, 
         .collect::<Result<_, _>>()?;
 
     let mut conn = connect()?;
-    conn.execute_batch("PRAGMA foreign_keys = ON;")
-        .map_err(|error| format!("Failed to enable foreign keys: {}", error))?;
 
     let transaction = conn
         .transaction()

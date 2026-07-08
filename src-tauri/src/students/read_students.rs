@@ -15,9 +15,6 @@ pub struct StudentRecord {
 #[command]
 pub fn read_students() -> Result<Vec<StudentRecord>, String> {
     let conn = connect()?;
-    conn.execute_batch("PRAGMA foreign_keys = ON;")
-        .map_err(|error| format!("Failed to enable foreign keys: {}", error))?;
-
     let mut student_statement = conn
         .prepare(
             "SELECT student_id, student_name, created_at, modified_at

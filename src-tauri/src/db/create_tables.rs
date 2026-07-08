@@ -49,22 +49,6 @@ pub fn init_db() -> Result<String, String> {
     )
     .map_err(|e| format!("Failed to create PHOTO table: {}", e))?;
     conn.execute(
-        "CREATE TABLE IF NOT EXISTS FACE_EMBEDDING (
-            embedding_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_id   INTEGER NOT NULL,
-            photo_id     INTEGER,
-            descriptor   TEXT NOT NULL,
-            model_name   TEXT NOT NULL DEFAULT 'face-api.js',
-            model_version TEXT,
-            quality_score INTEGER,
-            created_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (student_id) REFERENCES STUDENT(student_id) ON DELETE CASCADE,
-            FOREIGN KEY (photo_id) REFERENCES PHOTO(photo_id) ON DELETE SET NULL
-        )",
-        [],
-    )
-    .map_err(|e| format!("Failed to create FACE_EMBEDDING table: {}", e))?;
-    conn.execute(
         "CREATE TABLE IF NOT EXISTS ATTENDANCE_RECORD (
             attendance_id INTEGER PRIMARY KEY AUTOINCREMENT,
             student_id    INTEGER NOT NULL,

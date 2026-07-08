@@ -173,6 +173,13 @@ export default function App() {
       })
     );
   };
+  const handleDeleteStudent = (studentId: string) => {
+  setStudentReports((previousStudents) =>
+    previousStudents.filter(
+      (student) => student.studentId !== studentId
+    )
+  );
+};
 
 
   return (
@@ -203,6 +210,7 @@ export default function App() {
           students={studentReports}
           onAddStudent={addStudentRecord}
           onUpdateStudent={updateStudentRecord}
+          onDeleteStudent={handleDeleteStudent}
         />
       )}
     </div>
