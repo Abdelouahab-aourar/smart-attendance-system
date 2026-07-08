@@ -67,7 +67,6 @@ export function AdminPanel({
       reader.readAsDataURL(file);
     });
   };
-
   const resetStudentForm = () => {
     setEditingStudentId(null);
     setStudentName('');

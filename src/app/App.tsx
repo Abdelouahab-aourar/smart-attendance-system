@@ -2,7 +2,11 @@ import { useState } from 'react';
 import { Home } from './components/Home';
 import { AdminPanel } from './components/AdminPanel';
 import { EngagementMonitor } from './components/EngagementMonitor';
-import { mockStudentProfiles } from './lib/faceRecognition';
+import { useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { extractFaceDescriptorsFromImages, loadFaceRecognitionModels } from './lib/faceRecognition';
+import { readFile } from '@tauri-apps/plugin-fs';
+
 
 export type Screen = 'home' | 'admin' | 'engagement';
 
@@ -22,7 +26,13 @@ export interface StudentReport {
   images: string[];
   descriptors: number[][];
 }
-
+interface StudentRecordDto {
+  student_id: string;
+  student_name: string;
+  created_at: string;
+  modified_at: string;
+  images: string[];
+}
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -44,16 +54,61 @@ export default function App() {
     }
   ]);
 
-  const [studentReports, setStudentReports] = useState<StudentReport[]>(
-    mockStudentProfiles.map((student) => ({
-      studentId: student.id,
-      studentName: student.name,
-      created_at: '2025-01-17 09:05:00',
-      modified_at: '2025-01-17 09:05:00',
-      images: [],
-      descriptors: [Array.from(student.descriptor)],
-    }))
-  );
+  const toDataUrl = async (path: string): Promise<string | null> => {
+    try {
+      const bytes = await readFile(path); // Uint8Array
+      const base64 = btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(''));
+      const ext = path.split('.').pop()?.toLowerCase();
+      const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+      return `data:${mime};base64,${base64}`;
+    } catch (error) {
+      console.error(`Failed to read image at ${path}:`, error);
+      return null;
+    }
+  };
+
+  const [studentReports, setStudentReports] = useState<StudentReport[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadStudents = async () => {
+      try {
+        const records = await invoke<StudentRecordDto[]>('read_students');
+        await loadFaceRecognitionModels();
+
+        const mapped: StudentReport[] = await Promise.all(
+          records.map(async (record) => {
+            const imageUrls = (
+              await Promise.all(record.images.map((path) => toDataUrl(path)))
+            ).filter((url): url is string => url !== null);
+
+            const descriptors =
+              imageUrls.length > 0
+                ? await extractFaceDescriptorsFromImages(imageUrls)
+                : [];
+
+            return {
+              studentId: record.student_id,
+              studentName: record.student_name,
+              images: imageUrls,
+              created_at: record.created_at,
+              modified_at: record.modified_at,
+              descriptors,
+            };
+          })
+        );
+
+        if (!cancelled) setStudentReports(mapped);
+      } catch (error) {
+        console.error('Failed to load students:', error);
+      }
+    };
+
+    loadStudents();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleStartAttendance = () => {
     setCurrentScreen('engagement');

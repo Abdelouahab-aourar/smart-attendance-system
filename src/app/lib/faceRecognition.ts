@@ -54,17 +54,16 @@ const buildFallbackEnrolledStudents = (): EnrolledStudent[] => {
 };
 
 export const buildFaceMatcher = (students: EnrolledStudent[] = [], threshold = 0.58) => {
-  const sourceStudents = students.length > 0 ? students : buildFallbackEnrolledStudents();
-  const labeledDescriptors = sourceStudents
-    .filter((student) => student.descriptors.length > 0)
-    .map(
-      (student) =>
-        new faceapi.LabeledFaceDescriptors(
-          student.studentName,
-          student.descriptors.map((descriptor) => new Float32Array(descriptor))
-        )
-    );
+  const withDescriptors = students.filter((student) => student.descriptors.length > 0);
+  const sourceStudents = withDescriptors.length > 0 ? withDescriptors : buildFallbackEnrolledStudents();
 
+  const labeledDescriptors = sourceStudents.map(
+    (student) =>
+      new faceapi.LabeledFaceDescriptors(
+        student.studentName,
+        student.descriptors.map((descriptor) => new Float32Array(descriptor))
+      )
+  );
   return new faceapi.FaceMatcher(labeledDescriptors, threshold);
 };
 
