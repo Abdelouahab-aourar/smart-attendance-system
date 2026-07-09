@@ -3,7 +3,7 @@ mod students;
 mod attendances;
 use db::init_db;
 use students::{add_student, read_students, delete_student, update_student};
-use attendances::{add_attendance};
+use attendances::{add_attendance, read_attendance_records};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -11,7 +11,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![add_student, read_students, delete_student, update_student, add_attendance])
+        .invoke_handler(tauri::generate_handler![add_student, read_students, delete_student, update_student, add_attendance, read_attendance_records])
         .setup(|_app| {
             init_db().expect("Failed to initialize database");
             Ok(())

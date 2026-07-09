@@ -33,26 +33,17 @@ interface StudentRecordDto {
   modified_at: string;
   images: string[];
 }
+interface AttendanceRecordDto {
+  id: string;
+  student_name: string;
+  timestamp: string;
+  confidence: number;
+  status: 'present' | 'absent' | 'late';
+}
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([
-    {
-      id: '1',
-      studentName: 'John Doe',
-      timestamp: '2025-01-17 09:00:00',
-      confidence: 50,
-      status: 'present',
-    },
-    {
-      id: '2',
-      studentName: 'Jane Smith',
-      timestamp: '2025-01-17 09:05:00',
-      confidence: 30,
-      status: 'late',
-    }
-  ]);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
 
   const toDataUrl = async (path: string): Promise<string | null> => {
     try {
@@ -68,6 +59,29 @@ export default function App() {
   };
 
   const [studentReports, setStudentReports] = useState<StudentReport[]>([]);
+  useEffect(() => {
+    const loadAttendanceRecords = async () => {
+      try {
+        const records = await invoke<AttendanceRecordDto[]>(
+          "read_attendance_records"
+        );
+
+        setAttendanceRecords(
+          records.map((record) => ({
+            id: record.id,
+            studentName: record.student_name,
+            timestamp: record.timestamp,
+            confidence: record.confidence,
+            status: record.status,
+          }))
+        );
+      } catch (error) {
+        console.error("Failed to load attendance records:", error);
+      }
+    };
+
+    loadAttendanceRecords();
+  }, []);
   useEffect(() => {
     let cancelled = false;
 
@@ -170,12 +184,12 @@ export default function App() {
     );
   };
   const handleDeleteStudent = (studentId: string) => {
-  setStudentReports((previousStudents) =>
-    previousStudents.filter(
-      (student) => student.studentId !== studentId
-    )
-  );
-};
+    setStudentReports((previousStudents) =>
+      previousStudents.filter(
+        (student) => student.studentId !== studentId
+      )
+    );
+  };
 
 
   return (
