@@ -30,7 +30,7 @@ pub fn init_db() -> Result<String, String> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS STUDENT (
             student_id   INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_name  TEXT NOT NULL,
+            student_name  TEXT NOT NULL UNIQUE,
             created_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             modified_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )",

@@ -127,11 +127,7 @@ export default function App() {
     setCurrentScreen('home');
   };
 
-  const addAttendanceRecord = (studentName: string, confidence: number, faceDetected: boolean) => {
-    if (!faceDetected) {
-      return;
-    }
-
+  const addAttendanceRecord = (studentName: string, confidence: number) => {
     const newRecord: AttendanceRecord = {
       id: Date.now().toString(),
       studentName,

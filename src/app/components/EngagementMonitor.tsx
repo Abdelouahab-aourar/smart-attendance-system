@@ -7,10 +7,10 @@ import { Badge } from './ui/badge';
 import { Camera, ArrowLeft, Brain, PlayCircle, StopCircle, UserCheck, CheckCircle } from 'lucide-react';
 import { AttendanceRecord, StudentReport } from '../App';
 import { buildFaceMatcher, loadFaceRecognitionModels } from '../lib/faceRecognition';
-
+import { invoke } from '@tauri-apps/api/core';
 interface EngagementMonitorProps {
   onNavigateHome: () => void;
-  onAddAttendance: (studentName: string, confidence: number, faceDetected: boolean) => void;
+  onAddAttendance: (studentName: string, confidence: number) => void;
   attendanceRecords: AttendanceRecord[];
   students: StudentReport[];
 }
@@ -20,6 +20,26 @@ interface RecognizedFace {
   name: string;
   confidence: number;
 }
+// const handleDeleteStudent = async (studentId: string, studentName: string) => {
+//     const confirmation = await confirm(
+//       `This action cannot be reverted. Are you sure you want to delete ${studentName}?`,
+//       { title: 'Confirmation message', kind: 'warning' }
+//     );
+//     if (!confirmation) {
+//       return
+//     }
+
+//     try {
+//       await invoke<string>("delete_student", {
+//         studentId: Number(studentId),
+//       });
+//       onDeleteStudent(studentId);
+//       console.log("Student deleted successfully");
+//     } catch (error) {
+//       console.error("Failed to delete student:", error);
+//       await message(`Failed to delete the student: ${studentName}`, { title: 'Delete Error', kind: 'error' });
+//     }
+//   };
 
 export function EngagementMonitor({
   onNavigateHome,
@@ -43,7 +63,18 @@ export function EngagementMonitor({
     recognized: 0,
     unknown: 0,
   });
-
+  const handleAddAttendance = async (studentName: string, confidence: number) => {
+    try {
+      await invoke<string>("add_attendance", {
+        studentName: studentName,
+        confidence: confidence
+      });
+      onAddAttendance(studentName, confidence)
+    console.log("record added successfully");
+    } catch (error) {
+      console.error("Failed to add the record:", error);
+    }
+  }
   const clearScanTimer = () => {
     if (scanTimeoutRef.current !== null) {
       window.clearTimeout(scanTimeoutRef.current);
@@ -140,7 +171,8 @@ export function EngagementMonitor({
 
         if (isRecognized && !currentAttendanceNames.has(bestMatch.label) && !recognizedThisSessionRef.current.has(bestMatch.label)) {
           recognizedThisSessionRef.current.add(bestMatch.label);
-          onAddAttendance(bestMatch.label,confidence ,true,);
+          onAddAttendance(bestMatch.label, confidence);
+          handleAddAttendance(bestMatch.label, confidence);
         }
 
         const box = detection.detection.box;
@@ -345,7 +377,7 @@ export function EngagementMonitor({
                 {!isActive && (
                   <div className="mt-4 text-center text-gray-600">
                     <Camera className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-                      <p>Click "Start Detection" to begin facial recognition and engagement monitoring.</p>
+                    <p>Click "Start Detection" to begin facial recognition and engagement monitoring.</p>
                   </div>
                 )}
               </CardContent>
