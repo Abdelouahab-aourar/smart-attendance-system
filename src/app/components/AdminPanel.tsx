@@ -24,7 +24,7 @@ interface AdminPanelProps {
     originalStudentId: string,
     student: Omit<StudentReport, 'created_at' | 'modified_at'>
   ) => void;
-    onDeleteStudent: (studentId: string) => void;
+  onDeleteStudent: (studentId: string) => void;
 }
 
 export function AdminPanel({
@@ -66,7 +66,7 @@ export function AdminPanel({
       `This action cannot be reverted. Are you sure you want to delete ${studentName}?`,
       { title: 'Confirmation message', kind: 'warning' }
     );
-    if(!confirmation){
+    if (!confirmation) {
       return
     }
 
@@ -152,22 +152,31 @@ export function AdminPanel({
         return;
       }
 
-      const savedStudentId = await invoke<string>('add_student', {
-        studentName: trimmedStudentName,
-        images: selectedImages,
-      });
-
       const payload = {
-        studentId: savedStudentId,
+        studentId: editingStudentId ?? "",
         studentName: trimmedStudentName,
         images: selectedImages,
         descriptors,
       };
 
       if (editingStudentId) {
+        await invoke("update_student", {
+          studentId: editingStudentId,
+          studentName: trimmedStudentName,
+          images: selectedImages,
+        });
+
         onUpdateStudent(editingStudentId, payload);
       } else {
-        onAddStudent(payload);
+        const savedStudentId = await invoke<string>("add_student", {
+          studentName: trimmedStudentName,
+          images: selectedImages,
+        });
+
+        onAddStudent({
+          ...payload,
+          studentId: savedStudentId,
+        });
       }
 
       resetStudentForm();
