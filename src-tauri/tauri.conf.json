@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "smart-attendance-system",
   "version": "1.0.0",
-  "identifier": "com.data.smart-attendance-system",
+  "identifier": "smart-attendance-system.data",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "smart-attendance-system",
-        "width": 800,
-        "height": 600
+        "title": "Smart Attendance System",
+        "minWidth": 800,
+        "minHeight": 600,
+        "center": true,
+        "maximized": true
       }
     ],
     "security": {
