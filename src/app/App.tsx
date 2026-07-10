@@ -146,7 +146,7 @@ export default function App() {
       id: Date.now().toString(),
       studentName,
       confidence,
-      timestamp: new Date().toLocaleString(),
+      timestamp: new Date().toISOString().slice(0, 10) + ' ' + new Date().toTimeString().slice(0, 8),
       status: 'present',
     };
     setAttendanceRecords(prev => [...prev, newRecord]);

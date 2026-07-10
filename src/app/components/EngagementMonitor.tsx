@@ -20,27 +20,6 @@ interface RecognizedFace {
   name: string;
   confidence: number;
 }
-// const handleDeleteStudent = async (studentId: string, studentName: string) => {
-//     const confirmation = await confirm(
-//       `This action cannot be reverted. Are you sure you want to delete ${studentName}?`,
-//       { title: 'Confirmation message', kind: 'warning' }
-//     );
-//     if (!confirmation) {
-//       return
-//     }
-
-//     try {
-//       await invoke<string>("delete_student", {
-//         studentId: Number(studentId),
-//       });
-//       onDeleteStudent(studentId);
-//       console.log("Student deleted successfully");
-//     } catch (error) {
-//       console.error("Failed to delete student:", error);
-//       await message(`Failed to delete the student: ${studentName}`, { title: 'Delete Error', kind: 'error' });
-//     }
-//   };
-
 export function EngagementMonitor({
   onNavigateHome,
   onAddAttendance,
@@ -70,7 +49,7 @@ export function EngagementMonitor({
         confidence: confidence
       });
       onAddAttendance(studentName, confidence)
-    console.log("record added successfully");
+      console.log("record added successfully");
     } catch (error) {
       console.error("Failed to add the record:", error);
     }
@@ -158,8 +137,15 @@ export function EngagementMonitor({
 
       const resizedDetections = faceapi.resizeResults(detections, displaySize);
       const faceMatcher = faceMatcherRef.current;
-      const currentAttendanceNames = new Set(attendanceRecords.map((record) => record.studentName));
+      const today = new Date().toISOString().slice(0, 10);
 
+      const dailyAttendanceRecords = attendanceRecords.filter(
+        record => record.timestamp.slice(0, 10) === today
+      );
+
+      const currentAttendanceNames = new Set(
+        dailyAttendanceRecords.map(record => record.studentName)
+      );
       const nextFaces: RecognizedFace[] = resizedDetections.map((detection, index) => {
         const bestMatch = faceMatcher
           ? faceMatcher.findBestMatch(detection.descriptor)
@@ -171,7 +157,6 @@ export function EngagementMonitor({
 
         if (isRecognized && !currentAttendanceNames.has(bestMatch.label) && !recognizedThisSessionRef.current.has(bestMatch.label)) {
           recognizedThisSessionRef.current.add(bestMatch.label);
-          onAddAttendance(bestMatch.label, confidence);
           handleAddAttendance(bestMatch.label, confidence);
         }
 

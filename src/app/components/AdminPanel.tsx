@@ -260,6 +260,14 @@ export function AdminPanel({
                 Back to Home
               </Button>
             </div>
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-700">
+                <strong>Demo credentials:</strong>
+                <br />
+                Username: admin<br />
+                Password: password
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
