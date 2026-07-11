@@ -289,7 +289,13 @@ export function AdminPanel({
 
   // Calculate analytics
   const totalStudents = students.length;
-  const presentStudents = attendanceRecords.filter(r => r.status === 'present').length;
+  const today = new Date().toISOString().slice(0, 10);
+
+  const presentStudents = attendanceRecords.filter(
+    record =>
+      record.status === 'present' &&
+      record.timestamp.startsWith(today)
+  ).length;
   const attendanceRate = totalStudents > 0 ? Math.round((presentStudents / totalStudents) * 100) : 0;
 
   return (
@@ -380,19 +386,19 @@ export function AdminPanel({
                     <div className="flex justify-between items-center">
                       <span>High Performers (&gt;80% engagement)</span>
                       <Badge className="bg-green-100 text-green-800">
-                        5
+                        NaN
                       </Badge>
                     </div>
                     <div className="flex justify-between items-center">
                       <span>Average Performers (60-80%)</span>
                       <Badge className="bg-yellow-100 text-yellow-800">
-                        3
+                        NaN
                       </Badge>
                     </div>
                     <div className="flex justify-between items-center">
                       <span>Low Performers (&lt;60%)</span>
                       <Badge className="bg-red-100 text-red-800">
-                        2
+                        NaN
                       </Badge>
                     </div>
                   </div>
@@ -410,14 +416,14 @@ export function AdminPanel({
                       <div className="flex items-center gap-2">
                         <TrendingUp className="h-4 w-4 text-green-500" />
                         <Badge className="bg-green-100 text-green-800">
-                          2
+                          NaN
                         </Badge>
                       </div>
                     </div>
                     <div className="flex justify-between items-center">
                       <span>Stable Performance</span>
                       <Badge variant="outline">
-                        3
+                        NaN
                       </Badge>
                     </div>
                     <div className="flex justify-between items-center">
@@ -425,7 +431,7 @@ export function AdminPanel({
                       <div className="flex items-center gap-2">
                         <TrendingUp className="h-4 w-4 text-red-500 rotate-180" />
                         <Badge className="bg-red-100 text-red-800">
-                          1
+                          NaN
                         </Badge>
                       </div>
                     </div>
