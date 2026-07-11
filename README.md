@@ -2,6 +2,9 @@
 
 Smart Attendance System is a desktop attendance app built with Tauri, React, TypeScript, and Rust. It uses the device camera and `face-api.js` models to match enrolled students against a live video feed, then stores attendance data in a local SQLite database.
 
+## Screenshots
+![Live Recognition screen](./docs/screenshots/screenshot.png)
+
 ## What It Does
 
 - Live webcam preview for attendance capture.
@@ -12,7 +15,7 @@ Smart Attendance System is a desktop attendance app built with Tauri, React, Typ
 
 ## Tech Stack
 
-- Frontend: React , TypeScript, Vite.
+- Frontend: React, TypeScript, Vite.
 - Desktop shell: Tauri 2.
 - Styling: Tailwind CSS and Radix UI primitives.
 - Face recognition: `face-api.js`.
@@ -27,6 +30,10 @@ Smart Attendance System is a desktop attendance app built with Tauri, React, Typ
 - `src-tauri/src/` contains the Rust commands and database layer.
 - `public/models/` contains the bundled face-api.js model files.
 
+## Download / Install
+
+Prebuilt cross-platform executables (Windows, macOS, Linux) are published on the [Releases page](https://github.com/Abdelouahab-aourar/smart-attendance-system/releases). Download the installer for your platform and run it — no build step required.
+
 ## Requirements
 
 - Node.js 20 or newer.
@@ -37,7 +44,7 @@ Smart Attendance System is a desktop attendance app built with Tauri, React, Typ
 ## Installation
 
 ```bash
-pnpm install
+pnpm i
 ```
 
 ## Development
@@ -52,20 +59,6 @@ Run the Tauri desktop app with the frontend:
 
 ```bash
 pnpm tauri dev
-```
-
-## Build
-
-Create a production web build:
-
-```bash
-pnpm build
-```
-
-Build the desktop application with Tauri:
-
-```bash
-pnpm tauri build
 ```
 
 ## How to Use
